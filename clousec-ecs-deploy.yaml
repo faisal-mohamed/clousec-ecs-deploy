@@ -1,0 +1,652 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: This stack deploys the resources required for ClouSec product.
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID where the resources will be created
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Private Subnet ID for the first availability zone
+    Default: ""
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Private Subnet ID for the second availability zone
+    Default: ""
+
+  DataSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: Data Subnet ID for the first availability zone
+    Default: ""
+
+  DataSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: Data Subnet ID for the second availability zone
+    Default: ""
+
+  ClusterName:
+    Type: String
+    Description: ECS Cluster name
+    Default: ClouSec
+
+
+  PrivateLB:
+    Description: Do you need private loadbalancer
+    Default: true
+    Type: String
+    AllowedValues:
+      - true
+      - false
+
+  ServiceName:
+    Type: String
+    Default: clousec
+    Description: A name for the service
+
+  ImageUrl:
+    Type: String
+    Description: The url of a docker image that contains the application process that
+                 will handle the traffic for this service
+  ContainerPort:
+    Type: Number
+    Default: 8080
+    Description: What port number the application inside the docker container is binding to
+  ContainerCpu:
+    Type: Number
+    Default: 2048
+    Description: How much CPU to give the container. 1024 is 1 CPU
+  ContainerMemory:
+    Type: Number
+    Default: 4096
+    Description: How much memory in megabytes to give the container
+  DesiredCount:
+    Type: Number
+    Default: 1
+    Description: number of tasks to be created
+
+  SecurityHubRoleARN:
+    Type: String
+    Description: SecurityHub Role ARN
+  InspectorRoleARN:
+    Type: String
+    Description: Inspector Role ARN
+  ConfigRoleARN:
+    Type: String
+    Description: Config Aggregator Role ARN
+  AWSOrganizationRoleARN:
+    Type: String
+    Description: Organization Role ARN
+  AmazonIdentityStoreRoleARN:
+    Type: String
+    Description: IdentityStore Role ARN
+
+  CustomRuleName:
+    Type: String
+    Description: Custom Rule Role Name
+
+  ComplianceEventsQueue:
+    Type: String
+    Description: Name of the Compliance Queue
+    Default: compliance-events-queue
+  SecurityEventsQueue:
+    Type: String
+    Description: URL of the Security Events Queue
+  AWSRegion:
+    Type: String
+    Description: AWS Region
+    Default: ap-southeast-1
+
+  AWSSQSRegion:
+    Type: String
+    Description: Region where SQS is created
+    Default: ap-southeast-1
+  AWSAthenaDataBase:
+    Type: String
+    Description: Database name you created in athena
+    Default: security_logs_db
+  CloudtrailLogsBucket:
+    Type: String
+    Description: Name of the Cloudtrail Logs Bucket
+  WAFLogsBucket:
+    Type: String
+    Description: Name of the WAF Logs Bucket
+  
+  SESSenderEmail:
+    Type: String
+    Description: Sender Email Address
+  WebAclName:
+    Type: String
+    Description: Name of the WebAcl Name
+  AthenaOutputBucket:
+    Type: String
+    Description: Name of the Bucket configured as output for Athena in this format (s3://<bucket_name>/)
+    Default: s3://
+
+  # Replaced TaskRoleName parameter with TaskRoleARN
+  TaskRoleARN:
+    Type: String
+    Description: ARN of the pre-created ECS Task Role
+    Default: ""
+
+  MSTEAMSWEBHOOKURL:
+    Type: String
+    Description: Enter the MS Teams webhook url
+    Default: ""
+
+  SLACKWEBHOOKURL:
+    Type: String
+    Description: Enter the Slack webhook URL
+    Default: ""
+
+  LOCALAUTHENTICATION:
+    Default: "True"
+    Type: String
+    Description: Do you want to enable Local Authentication
+
+  LOCALADMINUSER:
+    Type: String
+    Description: Enter the Local admin User
+    Default: "clousec"
+
+  LOCALADMINPASSWORD:
+    Type: String
+    Description: Enter the Local admin password
+    Default: "clousec"
+    NoEcho: true
+
+  AWSROLETRUSTEDADVISORACC:
+    Type: String
+    Description: Enter the TrustedAdvisor role Account
+    Default: "" 
+
+  IDENTITYCENTERINSTANCEID:
+    Type: String
+    Description: Enter the Identity center instance ID
+    Default: ""  
+
+  AWSROLETRUSTEDADVISORROLE:
+    Type: String
+    Description: Enter the Trusted advisor role ARN
+    Default: ""  
+
+  IDENTITYCENTERINSTANCEARN:
+    Type: String
+    Description: Enter the Identity Center Instance ARN
+    Default: "" 
+
+  IDENTITYBEARERROLEARN:
+    Type: String
+    Description: Enter the Identity Bearer Role ARN
+    Default: ""  
+  IDPBOOTSTRAPROLEARN:
+    Type: String
+    Description: Enter the ID Bootstrap Role ARN
+    Default: ""  
+  IDENTITYAPPLICATIONARN:
+    Type: String
+    Description: Enter the Identity Center Application ARN
+    Default: ""  
+
+  CONFIGAGGREGATOR:
+    Type: String
+    Description: Enter the Config aggregator name
+    Default: "aws-controltower-GuardrailsComplianceAggregator"  
+  
+  DBNAME:
+    Type: String
+    Description: Enter the DB Name
+    Default: "clousecdb"
+
+  DBUSERNAME:
+    Type: String
+    Description: Enter the DB Username
+    Default: "postgres"
+  
+  DBPASSWORD:
+    Type: String
+    Description: Enter the DB Password
+    NoEcho: true
+
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+
+  LogGroupName:
+    Type: String
+    Description: Enter the Log Group Name
+    Default: "ClousecLogs"
+
+  LogGroupRetention:
+    Type: Number
+    Description: Enter the Log Group Name Retention days
+    Default: 30
+  
+  CloudSecDBSecret:
+    Type: String
+    Description: Enter the DB Secret manager name
+
+  AccountType:
+    Type: String
+    Description: Possible values are single and multiple. Use this parameter only when you are using single account to deploy. 
+
+  AccountNo:
+    Type: String
+    Description: Provide the account id if it is single account. please ignore this if you are deploying in multi account environment.
+
+  FromMailID:
+    Type: String
+    Description: This ID will be act as a sender email id.
+  ToMailID:
+    Type: String
+    Description: This ID will be used for sending notification email
+
+  SecurityMisconfigEnabledAccounts:
+    Type: String
+    Description: This is an optional parameter. We can add comma separated account ids if you want to enable only selected accounts for security hub.
+  TrustedAdvisorEnabledAccounts:
+    Type: String
+    Description: This is an optional parameter. We can add comma separated account ids if you want to enable only selected accounts for Trusted Advisor.
+
+  ThreatsEnabledAccounts:
+    Type: String
+    Description: This is an optional parameter. We can add comma separated account ids if you want to enable only selected accounts for threats.
+
+  InspectorEnabledAccounts:
+    Type: String
+    Description: This is an optional parameter. We can add comma separated account ids if you want to enable only selected accounts for Inspector.
+
+  HealthEnabledAccounts:
+    Type: String
+    Description: This is an optional parameter. We can add comma separated account ids if you want to enable only selected accounts for Health.
+
+  LoginType:
+    Type: String
+    Description: Possible values are ldap and local. LDAP type will allow you to integrate with your AD and local will allow you to manage your users in the clousec application itself. Its an optional field.
+    Default: "local"
+
+  CognitoUserPoolID:
+    Type: String
+    Description: Enter the AWS Cognito User Pool ID
+    Default: ""
+  CognitoClientID:
+    Type: String
+    Description: Enter the AWS Cognito Client ID
+    Default: ""
+  S3BrowserAccountID:
+    Type: String
+    Description: Enter the AWS Account ID where S3 Grant Access is Enabled
+    Default: ""
+
+Conditions:
+  CreatePrivateLB: !Equals 
+    - !Ref PrivateLB
+    - true
+
+Resources:
+  # ECS Resources
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Ref CloudSecDBSecret
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUSERNAME}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+  
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for RDS instance
+      SubnetIds: 
+        - !Ref DataSubnet1
+        - !Ref DataSubnet2
+
+  PostgresDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBNAME
+      DBInstanceIdentifier: !Ref DBNAME
+      AllocatedStorage: !Ref DBAllocatedStorage
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: postgres
+      MasterUsername: !Ref DBUSERNAME
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref DBSecret, ':SecretString:password}}' ]]
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow postgres access
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref FargateContainerSecurityGroup
+          FromPort: 5432
+          ToPort: 5432
+          IpProtocol: tcp
+
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref ClusterName
+      CapacityProviders: 
+        - 'FARGATE'
+        - 'FARGATE_SPOT'
+
+  FargateContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to the Fargate containers
+      VpcId: !Ref VpcId
+
+  EcsSecurityGroupIngressFromPrivateALB:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: CreatePrivateLB
+    Properties:
+      Description: Ingress from the private ALB
+      GroupId: !Ref 'FargateContainerSecurityGroup'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref 'PrivateLoadBalancerSG'
+
+  EcsSecurityGroupIngressFromSelf:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Ingress from other containers in the same security group
+      GroupId: !Ref 'FargateContainerSecurityGroup'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref 'FargateContainerSecurityGroup'
+
+  PrivateLoadBalancerSG:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreatePrivateLB
+    Properties:
+      GroupDescription: Access to the internal load balancer
+      VpcId: !Ref VpcId
+
+  PrivateLoadBalancerIngressFromECS:
+    Type: AWS::EC2::SecurityGroupIngress
+    Condition: CreatePrivateLB
+    Properties:
+      Description: Only accept traffic from a container in the fargate container security group
+      GroupId: !Ref 'PrivateLoadBalancerSG'
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref 'FargateContainerSecurityGroup'
+
+  PrivateLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: CreatePrivateLB
+    Properties:
+      Scheme: internal
+      LoadBalancerAttributes:
+      - Key: idle_timeout.timeout_seconds
+        Value: '30'
+      Subnets:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroups: [!Ref 'PrivateLoadBalancerSG']
+
+  TargetGroupPrivate:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: CreatePrivateLB
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 30
+      HealthyThresholdCount: 2
+      Name: !Join ['-', [!Ref 'AWS::StackName', 'drop-2']]
+      Port: 80
+      Matcher:
+        HttpCode: 200-499
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref VpcId
+      TargetType: ip
+
+  PrivateLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: CreatePrivateLB
+    DependsOn:
+      - PrivateLoadBalancer
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref 'TargetGroupPrivate'
+          Type: 'forward'
+      LoadBalancerArn: !Ref 'PrivateLoadBalancer'
+      Port: 80
+      Protocol: HTTP
+
+  CloudWatchLogGroupClouSec:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: !Ref LogGroupName
+      RetentionInDays: !Ref LogGroupRetention
+
+  # Removed ECSTaskRole resource
+
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs-tasks.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: RetrieveSecretManager
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Resource: !Ref DBSecret
+                Action: secretsmanager:GetSecretValue
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Ref 'ServiceName'
+      Cpu: !Ref 'ContainerCpu'
+      Memory: !Ref 'ContainerMemory'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      # Updated to use the TaskRoleARN parameter instead of GetAtt
+      TaskRoleArn: !Ref TaskRoleARN
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
+      ContainerDefinitions:
+        - Name: !Ref 'ServiceName'
+          Cpu: !Ref 'ContainerCpu'
+          Memory: !Ref 'ContainerMemory'
+          Image: !Ref 'ImageUrl'
+          LogConfiguration:
+            LogDriver: "awslogs"
+            Options: 
+              awslogs-group: !Ref CloudWatchLogGroupClouSec
+              awslogs-region: 'ap-southeast-1'
+              awslogs-stream-prefix: 'clousec-ecs'
+          PortMappings:
+            - ContainerPort: !Ref 'ContainerPort'
+          Secrets:
+            - Name: "DB_PASSWORD"
+              ValueFrom: !Sub "${DBSecret}:password::"
+          Environment:
+            - Name: "AWS.ORGANIZATION.SEC"
+              Value: ""
+            - Name: "AWS_ROLE_SSO_ACC"
+              Value: !Ref AmazonIdentityStoreRoleARN
+            - Name: "AWS_ROLE_IDENTITYSTORE_ACC"
+              Value: !Ref AmazonIdentityStoreRoleARN
+            - Name: "AWS.CONFORM.SEC"
+              Value: ""
+            - Name: "AWS.SSO.SEC"
+              Value: ""
+            - Name: "AWS.SEC.ACC"
+              Value: ""
+            - Name: "AWS_ROLE_ORGANIZATION_ACC"
+              Value: !Ref AWSOrganizationRoleARN
+            - Name: "AWS.IDENTITYSTORE.SEC"
+              Value: ""  
+            - Name: "AWS.COMP.SEC"
+              Value: ""
+            - Name: "AWS_ROLE_CONFIG_ACC"
+              Value: !Ref ConfigRoleARN
+            - Name: "AWS_ROLE_SECURITYHUB_ACC"
+              Value: !Ref SecurityHubRoleARN
+            - Name: "AWS_ROLE_INSPECTOR2_ACC"
+              Value: !Ref InspectorRoleARN
+            - Name: "AWS.CONFORM.ACC"
+              Value: ""
+            - Name: "AWS.ORGANIZATION.ACC"
+              Value: ""
+            - Name: "AWS.REG"
+              Value: "ap-southeast-1"
+            - Name: "AWS.SSO.ACC"
+              Value: ""
+            - Name: "PROFILE_NAME"
+              Value: "prod"
+            - Name: "DB_USERNAME"
+              Value: !Ref DBUSERNAME
+            - Name: "AWS.SEC.SEC"
+              Value: ""
+            - Name: "DB_URL"
+              Value: !Sub jdbc:postgresql://${PostgresDB.Endpoint.Address}:${PostgresDB.Endpoint.Port}/postgres
+            - Name: "CLOUSEC.LICENSE.KEY"
+              Value: ""
+            - Name: "AWS.IDENTITYSTORE.ACC"
+              Value: ""
+            - Name: "AWS.COMP.ACC"
+              Value: ""
+            - Name: "AWS_LOCAL_AUTHENTICATION"
+              Value: !Ref LOCALAUTHENTICATION    
+            - Name: "AWS_LOCAL_ADMIN_USER"
+              Value: !Ref LOCALADMINUSER    
+            - Name: "AWS_LOCAL_ADMIN_PASSWORD"
+              Value: !Ref LOCALADMINPASSWORD   
+            - Name: "SLACK_WEBHOOK_URL"
+              Value: !Ref SLACKWEBHOOKURL
+            - Name: "MSTEAMS_WEBHOOK_URL"
+              Value: !Ref MSTEAMSWEBHOOKURL
+            - Name: "AWS.ROLE.TRUSTEDADVISOR_ACC"
+              Value: !Ref AWSROLETRUSTEDADVISORACC
+            - Name: "CONFIG_AGGREGATOR"
+              Value: !Ref CONFIGAGGREGATOR
+            - Name: "IDENTITY_CENTER_INSTANCE_ID"
+              Value: !Ref IDENTITYCENTERINSTANCEID
+            - Name: "AWS_ROLE_TRUSTEDADVISOR_ROLE"
+              Value: !Ref AWSROLETRUSTEDADVISORROLE
+            - Name: "IDENTITY_CENTER_INSTANCE_ARN"
+              Value: !Ref IDENTITYCENTERINSTANCEARN
+            - Name: ACCOUNT_TYPE
+              Value: !Ref AccountType
+            - Name: ACCOUNT_NO
+              Value: !Ref AccountNo
+            - Name: FROM_MAIL_ID
+              Value: !Ref FromMailID
+            - Name: TO_MAIL_ID
+              Value: !Ref ToMailID
+            - Name: SECURITY_MISCONFIG_ENABLED_ACCOUNTS
+              Value: !Ref SecurityMisconfigEnabledAccounts
+            - Name: TRUSTED_ADVISOR_ENABLED_ACCOUNTS
+              Value: !Ref TrustedAdvisorEnabledAccounts
+            - Name: THREATS_ENABLED_ACCOUNTS
+              Value: !Ref ThreatsEnabledAccounts
+            - Name: INSPECTOR_ENABLED_ACCOUNTS
+              Value: !Ref InspectorEnabledAccounts
+            - Name: HEALTH_ENABLED_ACCOUNTS
+              Value: !Ref HealthEnabledAccounts
+            - Name: LOGIN_TYPE
+              Value: !Ref LoginType
+            - Name: DEPLOY_ENVIRONMENT
+              Value: "aws"
+            - Name: AWS_REG
+              Value: !Ref AWSRegion
+            - Name: AWS_REGION
+              Value: !Ref AWSRegion
+            
+
+
+
+            - Name: "AWS_CUSTOM_RULE_ROLEARN"
+              Value: !Ref CustomRuleName
+            - Name: "AWS_SQS_COMPLIANCE_EVENTS_QUEUE"
+              Value: !Ref ComplianceEventsQueue
+            - Name: "AWS_SQS_SECURITY_EVENTS_QUEUE_URL"
+              Value: !Ref SecurityEventsQueue
+            - Name: "AWS_SQS_REGION"
+              Value: !Ref AWSSQSRegion
+            - Name: "AWS_ATHENA_DATABASE"
+              Value: !Ref AWSAthenaDataBase
+            - Name: "AWS_ATHENA_BUCKET_NAME_CLOUDTRAIL"
+              Value: !Ref CloudtrailLogsBucket
+            - Name: "AWS_ATHENA_BUCKET_NAME_WAF"
+              Value: !Ref WAFLogsBucket
+            - Name: "AWS_SES_SENDER"
+              Value: !Ref SESSenderEmail
+            - Name: "AWS_ATHENA_WEBACLNAME"
+              Value: !Ref WebAclName
+            - Name: "AWS_ATHENA_OUTPUT_LOCATION"
+              Value: !Ref AthenaOutputBucket
+
+            - Name: "VITE_SERVER_URI"
+              Value: "http://localhost:8080"
+            - Name: "VITE_AWS_REGION"
+              Value: !Ref AWSRegion
+            - Name: "VITE_COGNITO_USER_POOL_ID"
+              Value: !Ref CognitoUserPoolID
+            - Name: "VITE_COGNITO_CLIENT_ID"
+              Value: !Ref CognitoClientID
+            - Name: "VITE_S3_BROWSER_ACCOUNT_ID"
+              Value: !Ref S3BrowserAccountID
+
+            - Name: "AWS_IDENTITY_BEARER_ROLE_ARN"
+              Value: !Ref IDENTITYBEARERROLEARN
+            - Name: "AWS_IDENTITY_APPLICATION_ARN"
+              Value: !Ref IDENTITYAPPLICATIONARN
+            - Name: "AWS_IDENTITY_BOOTSTRAP_ROLE_ARN"
+              Value: !Ref IDPBOOTSTRAPROLEARN
+
+
+            
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: 
+      - PrivateLoadBalancerListener
+      - CloudWatchLogGroupClouSec
+      - TaskDefinition
+      - ECSTaskExecutionRole
+      # Removed ECSTaskRole dependency
+    Properties:
+      ServiceName: !Ref 'ServiceName'
+      Cluster: !Ref ECSCluster
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 75
+      DesiredCount: !Ref 'DesiredCount'
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !Ref FargateContainerSecurityGroup
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+      TaskDefinition: !Ref 'TaskDefinition'
+      LoadBalancers:
+        - ContainerName: !Ref 'ServiceName'
+          ContainerPort: !Ref 'ContainerPort'
+          TargetGroupArn: !Ref 'TargetGroupPrivate'

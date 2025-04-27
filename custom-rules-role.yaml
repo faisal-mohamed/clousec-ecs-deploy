@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudFormation template to create a generic IAM read-only role with a 
+  parameterized trust policy for the ClouSec main account role.
+
+Parameters:
+  ClouSecMainAccountID:
+    Type: String
+    Description: The AWS Account ID of the ClouSec main account
+  
+  ClouSecMainAccountRoleName:
+    Type: String
+    Default: clousec-ecs-hub-role
+    Description: Enter the ClouSec Main Role Name
+
+  RoleName:
+    Type: String
+    Default: clousec-customrule-readonly-role
+    Description: Name of the IAM role to create
+
+Resources:
+  GenericReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: 
+                Fn::Sub: "arn:aws:iam::${ClouSecMainAccountID}:role/${ClouSecMainAccountRoleName}"
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+
+Outputs:
+  RoleName:
+    Description: Name of the IAM read-only role
+    Value: !Ref GenericReadOnlyRole
+
+  RoleArn:
+    Description: ARN of the IAM read-only role
+    Value: !GetAtt GenericReadOnlyRole.Arn

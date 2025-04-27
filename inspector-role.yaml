@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates an IAM role for Amazon Inspector with read-only and custom update permissions, trusted by ClouSec main role.
+
+Parameters:
+  ClouSecMainAccountID:
+    Type: String
+    Description: Enter the ClouSec Main Account ID
+
+  ClouSecMainAccountRoleName:
+    Type: String
+    Default: clousec-ecs-hub-role
+    Description: Enter the ClouSec Main Role Name
+
+  Rolename:
+    Type: String
+    Default: clousec-inspector-readonly-role
+    Description: Enter the Inspector Role Name
+
+Resources:
+  InspectorReadOnlyRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Ref Rolename
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: 
+                Fn::Sub: "arn:aws:iam::${ClouSecMainAccountID}:role/${ClouSecMainAccountRoleName}"
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonInspector2ReadOnlyAccess"
+      Policies:
+        - PolicyName: InspectorCustomPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - inspector:UpdateFindings
+                Resource: "*"
+
+Outputs:
+  InspectorRoleArn:
+    Description: ARN of the Inspector ReadOnly Role
+    Value: !GetAtt InspectorReadOnlyRole.Arn

@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates a Security Hub ReadOnly IAM Role with trust relationship to a specified ClouSec Main Account Role.
+
+Parameters:
+  ClouSecMainAccountID:
+    Type: String
+    Description: Enter the ClouSec Main Account ID
+
+  ClouSecMainAccountRoleName:
+    Type: String
+    Default: clousec-ecs-hub-role
+    Description: Enter the ClouSec Main Role Name
+
+  Rolename:
+    Type: String
+    Default: clousec-securityhub-readonly-role
+    Description: Enter the Inspector Role Name
+
+Resources:
+  SecurityHubReadOnlyRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Ref Rolename
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: 
+                Fn::Sub: "arn:aws:iam::${ClouSecMainAccountID}:role/${ClouSecMainAccountRoleName}"
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AWSSecurityHubReadOnlyAccess"
+      Policies:
+        - PolicyName: SecurityHubCustomPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - securityhub:CreateActionTarget
+                  - securityhub:CreateInsight
+                  - securityhub:UpdateInsight
+                  - securityhub:DeleteInsight
+                  - securityhub:BatchUpdateFindings
+                Resource: "*"
+
+Outputs:
+  SecurityHubRoleArn:
+    Description: ARN of the SecurityHub ReadOnly Role
+    Value: !GetAtt SecurityHubReadOnlyRole.Arn

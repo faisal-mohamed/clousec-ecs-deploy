@@ -1,0 +1,98 @@
+---
+Metadata:
+  AWSToolsMetrics:
+    IaC_Generator: "arn:aws:cloudformation:ap-southeast-1:282052313374:generatedTemplate/8c2572c8-c59b-47c5-8e36-1c6c984caf53"
+Resources:
+  SQSQueueComplianceeventsqueue:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::SQS::Queue"
+    DeletionPolicy: "Retain"
+    Properties:
+      SqsManagedSseEnabled: true
+      ReceiveMessageWaitTimeSeconds: 0
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600
+      MaximumMessageSize: 262144
+      VisibilityTimeout: 30
+      QueueName: "compliance-events-queue"   
+  IAMRoleEventbridgetosqs:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::IAM::Role"
+    DeletionPolicy: "Retain"
+    Properties:
+      Path: "/"
+      MaxSessionDuration: 3600
+      RoleName: "eventbridge-to-sqs"   
+      Description: "Allows EventBridge to access Secrets Manager resources on your behalf."
+      Policies:
+      - PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Resource: "arn:aws:sqs:*:*:compliance-events-queue*"  # Updated ARN pattern
+            Action:
+            - "sqs:SendMessage"
+            - "sqs:GetQueueUrl"
+            - "sqs:GetQueueAttributes"
+            Effect: "Allow"
+        PolicyName: "eventbridge-to-sqs"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Action: "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            Service: "events.amazonaws.com"
+  EventsRuleRuleresourcecreationevents:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Events::Rule"
+    DeletionPolicy: "Retain"
+    Properties:
+      EventBusName: "default"
+      EventPattern:
+        detail-type:
+        - "AWS API Call via CloudTrail"
+        detail:
+          eventName:
+          - prefix: "Run"
+          - prefix: "Start"
+          - prefix: "Stop"
+          - prefix: "Reboot"
+          - prefix: "Create"
+          - prefix: "Delete"
+          - prefix: "Modify"
+          - prefix: "Update"
+          - prefix: "Put"
+          - prefix: "Authorize"
+          - prefix: "Revoke"
+          - prefix: "Renew"
+          - prefix: "Schedule"
+          - prefix: "Disable"
+          - prefix: "Enable"
+          - prefix: "Terminate"
+          - prefix: "Rebuild"
+          - prefix: "Set"
+          - prefix: "Attach"
+          - prefix: "Detach"
+          - prefix: "Associate"
+          - prefix: "Disassociate"
+          - prefix: "Copy"
+          - prefix: "Rotate"
+          - prefix: "Restore"
+          - prefix: "Request"
+          - prefix: "Import"
+          - prefix: "Renew"
+          - prefix: "Register"
+          - prefix: "Deregister"
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - "SQSQueueComplianceeventsqueue"
+          - "Arn"
+        RoleArn:
+          Fn::GetAtt:
+          - "IAMRoleEventbridgetosqs"
+          - "Arn"
+        Id: "1"
+      Id: "resource-creation-events"
+      State: "ENABLED"
+      Name: "resource-creation-events"   

@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template to create EventBridge rules for GuardDuty findings, CloudTrail events, and Security Hub Config findings with SQS as target'
+
+Resources:
+  # SQS Queue
+  SecurityEventQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: security-events-queue
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600  # 14 days
+
+  # SQS Queue Policy to allow EventBridge to send messages
+  SecurityEventQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref SecurityEventQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt SecurityEventQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn:
+                  - !GetAtt GuardDutyFindingsRule.Arn
+                  - !GetAtt CloudTrailWriteEventsRule.Arn
+                  - !GetAtt SecurityHubConfigFindingsRule.Arn
+
+  # EventBridge Rule for GuardDuty Findings
+  GuardDutyFindingsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: guard-duty-findings-rule
+      Description: 'Rule to capture GuardDuty findings including security misconfigurations'
+      EventPattern:
+        source:
+          - aws.guardduty
+        detail-type:
+          - GuardDuty Finding
+      State: ENABLED
+      Targets:
+        - Id: SecurityEventQueueTarget
+          Arn: !GetAtt SecurityEventQueue.Arn
+
+  # EventBridge Rule for CloudTrail Write Events
+  CloudTrailWriteEventsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: cloudtrail-write-events-rule
+      Description: 'Rule to capture CloudTrail events with readOnly: false'
+      EventPattern:
+        source:
+          - aws.cloudtrail
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          readOnly:
+            - false
+      State: ENABLED
+      Targets:
+        - Id: SecurityEventQueueTarget
+          Arn: !GetAtt SecurityEventQueue.Arn
+          
+  # NEW EventBridge Rule for Security Hub Config Findings
+  SecurityHubConfigFindingsRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: securityhub-config-findings-rule
+      Description: 'Rule to capture Security Hub findings originating from AWS Config'
+      EventPattern:
+        source:
+          - aws.securityhub
+        detail-type:
+          - Security Hub Findings - Imported
+        detail:
+          findings:
+            ProductFields:
+              aws/securityhub/ProductName:
+                - Config
+      State: ENABLED
+      Targets:
+        - Id: SecurityEventQueueTarget
+          Arn: !GetAtt SecurityEventQueue.Arn
+
+Outputs:
+  SecurityEventQueueURL:
+    Description: URL of the SQS queue for security events
+    Value: !Ref SecurityEventQueue
+  SecurityEventQueueARN:
+    Description: ARN of the SQS queue for security events
+    Value: !GetAtt SecurityEventQueue.Arn
+  GuardDutyFindingsRuleARN:
+    Description: ARN of the EventBridge rule for GuardDuty findings
+    Value: !GetAtt GuardDutyFindingsRule.Arn
+  CloudTrailWriteEventsRuleARN:
+    Description: ARN of the EventBridge rule for CloudTrail write events
+    Value: !GetAtt CloudTrailWriteEventsRule.Arn
+  SecurityHubConfigFindingsRuleARN:
+    Description: ARN of the EventBridge rule for Security Hub Config findings
+    Value: !GetAtt SecurityHubConfigFindingsRule.Arn

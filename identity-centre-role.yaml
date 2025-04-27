@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates a read-only IAM role for AWS SSO with trust relationship to a specified ClouSec Main Account Role.
+
+Parameters:
+  ClouSecMainAccountID:
+    Type: String
+    Description: Enter the ClouSec Main Account ID
+
+  ClouSecMainAccountRoleName:
+    Type: String
+    Default: clousec-ecs-hub-role
+    Description: Enter the ClouSec Main Role Name
+
+  Rolename:
+    Type: String
+    Default: clousec-sso-readonly-role
+    Description: Enter the SSO Role Name
+
+Resources:
+  SSOReadOnlyRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Ref Rolename
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: 
+                Fn::Sub: "arn:aws:iam::${ClouSecMainAccountID}:role/${ClouSecMainAccountRoleName}"
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AWSSSOReadOnly"
+
+  IdentityStorePolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: IdentityStorePolicy
+      Roles:
+        - !Ref SSOReadOnlyRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - identitystore:DescribeUser
+              - identitystore:IsMemberInGroups
+              - identitystore:ListGroupMemberships
+              - identitystore:DescribeGroupMembership
+              - identitystore:GetGroupMembershipId
+              - identitystore:ListUsers
+              - identitystore:DescribeGroup
+              - identitystore:ListGroups
+              - identitystore:ListGroupMembershipsForMember
+              - identitystore:GetGroupId
+              - identitystore:GetUserId
+            Resource: "*"
+
+Outputs:
+  SSOReadOnlyRoleArn:
+    Description: ARN of the SSO ReadOnly Role
+    Value: !GetAtt SSOReadOnlyRole.Arn

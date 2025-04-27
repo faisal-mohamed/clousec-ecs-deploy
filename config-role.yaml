@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates an IAM role for AWS Config with read-only access, trusted by the ClouSec main role.
+
+Parameters:
+  ClouSecMainAccountID:
+    Type: String
+    Description: Enter the ClouSec Main Account ID
+
+  ClouSecMainAccountRoleName:
+    Type: String
+    Default: clousec-ecs-hub-role
+    Description: Enter the ClouSec Main Role Name
+
+  Rolename:
+    Type: String
+    Default: clousec-config-readonly-role
+    Description: Enter the Config Role Name
+
+Resources:
+  ConfigReadOnlyRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Ref Rolename
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: 
+                Fn::Sub: "arn:aws:iam::${ClouSecMainAccountID}:role/${ClouSecMainAccountRoleName}"
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AWSConfigUserAccess" # Read-only access to AWS Config
+      Policies:
+        - PolicyName: ConfigCustomPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:Get*  # Permissions for reading Config data
+                  - config:List*  # Permissions for listing resources
+                  - config:Select*  # Permissions for running Config advanced queries
+                  - config-aggregator:List*  # Permissions for listing aggregators
+                Resource: "*"
+
+Outputs:
+  ConfigRoleArn:
+    Description: ARN of the Config ReadOnly Role
+    Value: !GetAtt ConfigReadOnlyRole.Arn

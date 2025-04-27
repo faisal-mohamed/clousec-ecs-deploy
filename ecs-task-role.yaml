@@ -1,0 +1,245 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates the ECS Task Role for ClouSec product
+
+Parameters:
+  RoleName:
+    Type: String
+    Default: clousec-ecs-hub-role
+    Description: The name for the ECS Task Role
+
+  SecurityHubAccountId:
+    Type: String
+    Default: ""
+    Description: Account ID where SecurityHub Role exists
+
+  SecurityHubRoleName:
+    Type: String
+    Default: "clousec-securityhub-readonly-role"
+    Description: Name of the SecurityHub Role
+
+  InspectorAccountId:
+    Type: String
+    Default: ""
+    Description: Account ID where Inspector Role exists
+
+  InspectorRoleName:
+    Type: String
+    Default: "clousec-inspector-readonly-role"
+    Description: Name of the Inspector Role
+
+  ConfigAccountId:
+    Type: String
+    Default: ""
+    Description: Account ID where Config Aggregator Role exists
+
+  ConfigRoleName:
+    Type: String
+    Default: "clousec-config-readonly-role"
+    Description: Name of the Config Aggregator Role
+
+  OrganizationAccountId:
+    Type: String
+    Default: ""
+    Description: Account ID where Organization Role exists
+
+  OrganizationRoleName:
+    Type: String
+    Default: "clousec-organization-readonly-role"
+    Description: Name of the Organization Role
+
+  SSOAccountId:
+    Type: String
+    Default: ""
+    Description: Account ID where SSO Role exists
+
+  SSORoleName:
+    Type: String
+    Default: "clousec-sso-readonly-role"
+    Description: Name of the SSO Role
+
+  TrustedAdvisorHealthAccountId:
+    Type: String
+    Default: ""
+    Description: Account ID where TrustedAdvisor health Role exists
+
+  TrustedAdvisorHealthRoleName:
+    Type: String
+    Default: "clousec-trustedadvisor-readonly-role"
+    Description: Name of the TrustedAdvisor Role
+
+  CustomRuleAccountId:
+    Type: String
+    Default: ""
+    Description: Account ID where Custom Rule Role exists
+
+  CustomRuleRoleName:
+    Type: String
+    Default: "clousec-customrule-readonly-role"
+    Description: Name of the Custom Rule Role
+
+  ClousecIdpBootstrapRoleName:
+    Type: String
+    Default: "clousec-idc-bootstrap-role"
+    Description: Clousec Idb Bootstrap Role Name
+
+  LogGroupName:
+    Type: String
+    Default: "ClousecLogs"
+    Description: Name of the CloudWatch Log Group used in the main template
+
+  ComplianceQueueArn:
+    Type: String
+    Description: ARN of the compliance events SQS queue
+
+  SecurityQueueArn:
+    Type: String
+    Description: ARN of the security events SQS queue
+
+  WafS3BucketArn:
+    Type: String
+    Description: S3 Bucket ARN for WAF logs
+
+  WafS3ObjectArn:
+    Type: String
+    Description: ARN of the WAF logs S3 bucket objects (arn with /* at the end)
+
+  CloudTrailS3BucketArn:
+    Type: String
+    Description: S3 Bucket ARN for CloudTrail logs
+
+  CloudTrailS3ObjectArn:
+    Type: String
+    Description: ARN of the Cloudtrail logs S3 bucket objects (arn with /* at the end)
+
+Resources:
+  ECSTaskRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Ref RoleName
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: STSAssumeRole
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: 
+                  - !Sub "arn:aws:iam::${SecurityHubAccountId}:role/${SecurityHubRoleName}"
+                  - !Sub "arn:aws:iam::${InspectorAccountId}:role/${InspectorRoleName}"
+                  - !Sub "arn:aws:iam::${ConfigAccountId}:role/${ConfigRoleName}"
+                  - !Sub "arn:aws:iam::${OrganizationAccountId}:role/${OrganizationRoleName}"
+                  - !Sub "arn:aws:iam::${SSOAccountId}:role/${SSORoleName}"
+                  - !Sub "arn:aws:iam::${TrustedAdvisorHealthAccountId}:role/${TrustedAdvisorHealthRoleName}"
+                  - !Sub "arn:aws:iam::${CustomRuleAccountId}:role/${CustomRuleRoleName}"
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/${ClousecIdpBootstrapRoleName}"
+
+
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroupName}:*"
+              - Effect: Allow
+                Action: aws-marketplace:RegisterUsage
+                Resource: "*"
+
+        - PolicyName: SQS-Athena-Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: SQSAccess
+                Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:GetQueueUrl
+                Resource:
+                  - !Ref ComplianceQueueArn
+                  - !Ref SecurityQueueArn
+
+              - Sid: SESAccess
+                Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: "*"
+
+              - Sid: AthenaFullAccess
+                Effect: Allow
+                Action:
+                  - athena:StartQueryExecution
+                  - athena:GetQueryExecution
+                  - athena:GetQueryResults
+                  - athena:GetWorkGroup
+                  - athena:CreateWorkGroup
+                  - athena:UpdateWorkGroup
+                  - athena:DeleteWorkGroup
+                  - athena:CreateNamedQuery
+                  - athena:DeleteNamedQuery
+                  - athena:GetNamedQuery
+                  - athena:ListNamedQueries
+                  - athena:ListWorkGroups
+                  - athena:GetQueryResultsStream
+                  - athena:ListDatabases
+                  - athena:ListTableMetadata
+                  - athena:GetDataCatalog
+                  - athena:ListDataCatalogs
+                  - athena:BatchGetQueryExecution
+                  - athena:StopQueryExecution
+                Resource: "*"
+
+              - Sid: GlueFullAccessForAthena
+                Effect: Allow
+                Action:
+                  - glue:GetDatabase
+                  - glue:GetDatabases
+                  - glue:GetTable
+                  - glue:GetTables
+                  - glue:GetPartition
+                  - glue:GetPartitions
+                  - glue:CreateDatabase
+                  - glue:UpdateDatabase
+                  - glue:DeleteDatabase
+                  - glue:CreateTable
+                  - glue:UpdateTable
+                  - glue:DeleteTable
+                  - glue:CreatePartition
+                  - glue:DeletePartition
+                Resource: "*"
+
+              - Sid: S3AccessForAthena
+                Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:ListMultipartUploadParts
+                  - s3:AbortMultipartUpload
+                  - s3:CreateBucket
+                  - s3:PutObject
+                Resource:
+                  - !Ref WafS3BucketArn
+                  - !Ref WafS3ObjectArn
+                  - !Ref CloudTrailS3BucketArn
+                  - !Ref CloudTrailS3ObjectArn
+
+Outputs:
+  TaskRoleARN:
+    Description: ARN of the created ECS Task Role
+    Value: !GetAtt ECSTaskRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TaskRoleARN"
