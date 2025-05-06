@@ -190,8 +190,8 @@ Parameters:
 
   CONFIGAGGREGATOR:
     Type: String
-    Description: Enter the Config aggregator name
-    Default: "aws-controltower-GuardrailsComplianceAggregator"  
+    Description: Enter the Config aggregator name. Skip this for single account deployment
+    Default: ""  
   
   DBNAME:
     Type: String
