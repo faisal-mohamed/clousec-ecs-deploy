@@ -31,6 +31,8 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/AWSSSOReadOnly"
+        - "arn:aws:iam::aws:policy/AWSSSOMemberAccountAdministrator"
+        - "arn:aws:iam::aws:policy/AWSSSOMasterAccountAdministrator"
 
   IdentityStorePolicy:
     Type: "AWS::IAM::Policy"
