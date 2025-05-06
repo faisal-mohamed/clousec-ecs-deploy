@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Template for creating EventBridge rules that target an SQS queue in a different AWS account'
+
+Parameters:
+  TargetAccountId:
+    Type: String
+    Description: AWS account ID where the target SQS queue resides
+    
+  TargetQueueArn:
+    Type: String
+    Description: ARN of the target SQS queue in the different account
+    
+Resources:
+  # IAM Role for EventBridge to send events to the SQS queue in another account
+  IAMRoleEventbridgetosqs:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EventBridgeToSQSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:*
+                Resource: !Ref TargetQueueArn
+
+  # EventBridge Rule for resource creation events
+  EventsRuleResourcecreationevents:
+    Type: AWS::Events::Rule
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      EventBusName: default
+      EventPattern:
+        detail-type:
+          - "AWS API Call via CloudTrail"
+        detail:
+          eventName:
+            - prefix: "Run"
+            - prefix: "Start"
+            - prefix: "Stop"
+            - prefix: "Reboot"
+            - prefix: "Create"
+            - prefix: "Delete"
+            - prefix: "Modify"
+            - prefix: "Update"
+            - prefix: "Put"
+            - prefix: "Authorize"
+            - prefix: "Revoke"
+            - prefix: "Renew"
+            - prefix: "Schedule"
+            - prefix: "Disable"
+            - prefix: "Enable"
+            - prefix: "Terminate"
+            - prefix: "Rebuild"
+            - prefix: "Set"
+            - prefix: "Attach"
+            - prefix: "Detach"
+            - prefix: "Associate"
+            - prefix: "Disassociate"
+            - prefix: "Copy"
+            - prefix: "Rotate"
+            - prefix: "Restore"
+            - prefix: "Request"
+            - prefix: "Import"
+            - prefix: "Register"
+            - prefix: "Deregister"
+      Targets:
+        - Arn: !Ref TargetQueueArn
+          RoleArn: !GetAtt IAMRoleEventbridgetosqs.Arn
+          Id: "1"
+      State: ENABLED
+      Name: resource-creation-events
+
+Outputs:
+  EventRuleArn:
+    Description: ARN of the created EventBridge rule
+    Value: !GetAtt EventsRuleResourcecreationevents.Arn
+  
+  EventBridgeRoleArn:
+    Description: ARN of the IAM role for EventBridge to SQS access
+    Value: !GetAtt IAMRoleEventbridgetosqs.Arn
