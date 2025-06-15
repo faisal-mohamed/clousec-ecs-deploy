@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudFormation template to create EventBridge rules for GuardDuty findings, CloudTrail events, and Security Hub Config findings with cross-account SQS as target'
+Description: 'CloudFormation template to create EventBridge rules for GuardDuty findings, CloudTrail events, Security Hub findings, and security-sensitive API activity with cross-account SQS as target'
 
 Parameters:
   TargetAccountId:
@@ -11,7 +11,6 @@ Parameters:
     Description: ARN of the target SQS queue in the different account
 
 Resources:
-  # IAM Role for EventBridge to send events to the SQS queue in another account
   EventBridgeToSQSRole:
     Type: AWS::IAM::Role
     Properties:
@@ -32,12 +31,11 @@ Resources:
                   - sqs:SendMessage
                 Resource: !Ref TargetQueueArn
 
-  # EventBridge Rule for GuardDuty Findings
   GuardDutyFindingsRule:
     Type: AWS::Events::Rule
     Properties:
       Name: guard-duty-findings-rule
-      Description: 'Rule to capture GuardDuty findings including security misconfigurations'
+      Description: 'Rule to capture GuardDuty findings'
       EventPattern:
         source:
           - aws.guardduty
@@ -49,12 +47,11 @@ Resources:
           Arn: !Ref TargetQueueArn
           RoleArn: !GetAtt EventBridgeToSQSRole.Arn
 
-  # EventBridge Rule for CloudTrail Write Events
   CloudTrailWriteEventsRule:
     Type: AWS::Events::Rule
     Properties:
       Name: cloudtrail-write-events-rule
-      Description: 'Rule to capture CloudTrail events with readOnly: false'
+      Description: 'Rule to capture CloudTrail write API calls'
       EventPattern:
         source:
           - aws.cloudtrail
@@ -68,13 +65,12 @@ Resources:
         - Id: SecurityEventQueueTarget
           Arn: !Ref TargetQueueArn
           RoleArn: !GetAtt EventBridgeToSQSRole.Arn
-          
-  # EventBridge Rule for Security Hub Config Findings
+
   SecurityHubConfigFindingsRule:
     Type: AWS::Events::Rule
     Properties:
       Name: securityhub-config-findings-rule
-      Description: 'Rule to capture Security Hub findings originating from AWS Config'
+      Description: 'Rule to capture Security Hub findings from AWS Config'
       EventPattern:
         source:
           - aws.securityhub
@@ -85,6 +81,85 @@ Resources:
             ProductFields:
               aws/securityhub/ProductName:
                 - Config
+      State: ENABLED
+      Targets:
+        - Id: SecurityEventQueueTarget
+          Arn: !Ref TargetQueueArn
+          RoleArn: !GetAtt EventBridgeToSQSRole.Arn
+
+  SecurityGroupChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: security-group-change-rule
+      Description: 'Rule for EC2 Security Group changes'
+      EventPattern:
+        source:
+          - aws.ec2
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventName:
+            - AuthorizeSecurityGroupIngress
+            - AuthorizeSecurityGroupEgress
+            - RevokeSecurityGroupIngress
+            - RevokeSecurityGroupEgress
+            - CreateSecurityGroup
+            - DeleteSecurityGroup
+      State: ENABLED
+      Targets:
+        - Id: SecurityEventQueueTarget
+          Arn: !Ref TargetQueueArn
+          RoleArn: !GetAtt EventBridgeToSQSRole.Arn
+
+  FailedConsoleLoginRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: failed-console-login-rule
+      Description: 'Rule for failed AWS Console login attempts'
+      EventPattern:
+        source:
+          - aws.signin
+        detail-type:
+          - AWS Console Sign In via CloudTrail
+        detail:
+          eventName:
+            - ConsoleLogin
+          errorMessage:
+            - Failed authentication
+      State: ENABLED
+      Targets:
+        - Id: SecurityEventQueueTarget
+          Arn: !Ref TargetQueueArn
+          RoleArn: !GetAtt EventBridgeToSQSRole.Arn
+
+  IAMPolicyChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: iam-policy-change-rule
+      Description: 'Rule for IAM policy changes'
+      EventPattern:
+        source:
+          - aws.iam
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventName:
+            - DeleteGroupPolicy
+            - DeleteRolePolicy
+            - DeleteUserPolicy
+            - PutGroupPolicy
+            - PutRolePolicy
+            - PutUserPolicy
+            - CreatePolicy
+            - DeletePolicy
+            - CreatePolicyVersion
+            - DeletePolicyVersion
+            - AttachRolePolicy
+            - DetachRolePolicy
+            - AttachUserPolicy
+            - DetachUserPolicy
+            - AttachGroupPolicy
+            - DetachGroupPolicy
       State: ENABLED
       Targets:
         - Id: SecurityEventQueueTarget
@@ -104,3 +179,12 @@ Outputs:
   SecurityHubConfigFindingsRuleARN:
     Description: ARN of the EventBridge rule for Security Hub Config findings
     Value: !GetAtt SecurityHubConfigFindingsRule.Arn
+  SecurityGroupChangeRuleARN:
+    Description: ARN of the EventBridge rule for security group modifications
+    Value: !GetAtt SecurityGroupChangeRule.Arn
+  FailedConsoleLoginRuleARN:
+    Description: ARN of the EventBridge rule for failed console logins
+    Value: !GetAtt FailedConsoleLoginRule.Arn
+  IAMPolicyChangeRuleARN:
+    Description: ARN of the EventBridge rule for IAM policy modifications
+    Value: !GetAtt IAMPolicyChangeRule.Arn
