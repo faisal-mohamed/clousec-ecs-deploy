@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Template to create EventBridge rules for SG changes, ConsoleLogin failures, and IAM policy changes. SQS Queue ARN is passed as parameter.'
+
+Parameters:
+  TargetQueueArn:
+    Type: String
+    Description: ARN of the existing SQS queue to send events to
+
+Resources:
+
+  # IAM Role for EventBridge to send messages to SQS
+  EventBridgeSQSSendRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: eventbridge-sqs-send-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowSQSSend
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !Ref TargetQueueArn
+
+  # EventBridge Rule: Security Group Changes
+  SecurityGroupChangesRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: security-group-changes-rule
+      EventPattern:
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventName:
+            - AuthorizeSecurityGroupIngress
+            - AuthorizeSecurityGroupEgress
+            - RevokeSecurityGroupIngress
+            - RevokeSecurityGroupEgress
+            - CreateSecurityGroup
+            - DeleteSecurityGroup
+      State: ENABLED
+      Targets:
+        - Id: SqsTarget
+          Arn: !Ref TargetQueueArn
+          RoleArn: !GetAtt EventBridgeSQSSendRole.Arn
+
+  # EventBridge Rule: Console Login Failures
+  ConsoleLoginFailureRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: console-login-failure-rule
+      EventPattern:
+        detail-type:
+          - AWS Console Sign In via CloudTrail
+        source:
+          - aws.signin
+        detail:
+          eventName:
+            - ConsoleLogin
+          errorMessage:
+            - "Failed authentication"
+      State: ENABLED
+      Targets:
+        - Id: SqsTarget
+          Arn: !Ref TargetQueueArn
+          RoleArn: !GetAtt EventBridgeSQSSendRole.Arn
+
+  # EventBridge Rule: IAM Policy Changes
+  IAMPolicyChangesRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: iam-policy-changes-rule
+      EventPattern:
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventName:
+            - DeleteGroupPolicy
+            - DeleteRolePolicy
+            - DeleteUserPolicy
+            - PutGroupPolicy
+            - PutRolePolicy
+            - PutUserPolicy
+            - CreatePolicy
+            - DeletePolicy
+            - CreatePolicyVersion
+            - DeletePolicyVersion
+            - AttachRolePolicy
+            - DetachRolePolicy
+            - AttachUserPolicy
+            - DetachUserPolicy
+            - AttachGroupPolicy
+            - DetachGroupPolicy
+      State: ENABLED
+      Targets:
+        - Id: SqsTarget
+          Arn: !Ref TargetQueueArn
+          RoleArn: !GetAtt EventBridgeSQSSendRole.Arn

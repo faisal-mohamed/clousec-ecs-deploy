@@ -281,6 +281,17 @@ Parameters:
     Type: String
     Description: Enter the AWS Account ID where S3 Grant Access is Enabled
     Default: ""
+  WafS3EventsQueueURL:
+    Type: String
+    Description: Enter the WAF S3 Events Queue URL
+    Default: ""
+  AWSMarketplaceEnabled:
+    Description: false,  if image is from clousec free version 
+    Default: true
+    Type: String
+    AllowedValues:
+      - true
+      - false
 
 Conditions:
   CreatePrivateLB: !Equals 
@@ -600,6 +611,10 @@ Resources:
               Value: !Ref WebAclName
             - Name: "AWS_ATHENA_OUTPUT_LOCATION"
               Value: !Ref AthenaOutputBucket
+            - Name: "WAF_S3_EVENT_QUEUE_URL"
+              Value: !Ref WafS3EventsQueueURL
+            - Name: "AWS_MARKETPLACE_ENABLED"
+              Value: !Ref AWSMarketplaceEnabled
 
             - Name: "VITE_SERVER_URI"
               Value: "http://localhost:8080"
@@ -611,6 +626,7 @@ Resources:
               Value: !Ref CognitoClientID
             - Name: "VITE_S3_BROWSER_ACCOUNT_ID"
               Value: !Ref S3BrowserAccountID
+
 
             - Name: "AWS_IDENTITY_BEARER_ROLE_ARN"
               Value: !Ref IDENTITYBEARERROLEARN

@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'CloudFormation template to create EventBridge rules for GuardDuty findings, CloudTrail events, and Security Hub Config findings with SQS as target'
+Description: 'Updated template for EventBridge to SQS with IAM Role and cleaned event patterns'
 
 Resources:
+
   # SQS Queue
   SecurityEventQueue:
     Type: AWS::SQS::Queue
@@ -10,8 +11,41 @@ Resources:
       VisibilityTimeout: 300
       MessageRetentionPeriod: 1209600  # 14 days
 
-  # SQS Queue Policy to allow EventBridge to send messages
+  # IAM Role for EventBridge to send messages to SQS
+  EventBridgeSQSSendRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: eventbridge-sqs-send-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AllowSQSSend
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt SecurityEventQueue.Arn
+
   SecurityEventQueuePolicy:
+  Type: AWS::SQS::QueuePolicy
+  Properties:
+    Queues:
+      - !Ref SecurityEventQueue
+    PolicyDocument:
+      Version: '2012-10-17'
+      Statement:
+        - Effect: Allow
+          Principal:
+            Service: events.amazonaws.com
+          Action: "sqs:*"
+          Resource: !GetAtt SecurityEventQueue.Arn
+
     Type: AWS::SQS::QueuePolicy
     Properties:
       Queues:
@@ -30,32 +64,30 @@ Resources:
                   - !GetAtt GuardDutyFindingsRule.Arn
                   - !GetAtt CloudTrailWriteEventsRule.Arn
                   - !GetAtt SecurityHubConfigFindingsRule.Arn
+                  - !GetAtt SecurityGroupChangesRule.Arn
+                  - !GetAtt ConsoleLoginFailureRule.Arn
+                  - !GetAtt IAMPolicyChangesRule.Arn
 
-  # EventBridge Rule for GuardDuty Findings
+  # EventBridge Rule: GuardDuty Findings
   GuardDutyFindingsRule:
     Type: AWS::Events::Rule
     Properties:
       Name: guard-duty-findings-rule
-      Description: 'Rule to capture GuardDuty findings including security misconfigurations'
       EventPattern:
-        source:
-          - aws.guardduty
         detail-type:
           - GuardDuty Finding
       State: ENABLED
       Targets:
         - Id: SecurityEventQueueTarget
           Arn: !GetAtt SecurityEventQueue.Arn
+          RoleArn: !GetAtt EventBridgeSQSSendRole.Arn
 
-  # EventBridge Rule for CloudTrail Write Events
+  # EventBridge Rule: CloudTrail Write Events
   CloudTrailWriteEventsRule:
     Type: AWS::Events::Rule
     Properties:
       Name: cloudtrail-write-events-rule
-      Description: 'Rule to capture CloudTrail events with readOnly: false'
       EventPattern:
-        source:
-          - aws.cloudtrail
         detail-type:
           - AWS API Call via CloudTrail
         detail:
@@ -65,18 +97,18 @@ Resources:
       Targets:
         - Id: SecurityEventQueueTarget
           Arn: !GetAtt SecurityEventQueue.Arn
-          
-  # NEW EventBridge Rule for Security Hub Config Findings
+          RoleArn: !GetAtt EventBridgeSQSSendRole.Arn
+
+  # EventBridge Rule: Security Hub Config Findings
   SecurityHubConfigFindingsRule:
     Type: AWS::Events::Rule
     Properties:
       Name: securityhub-config-findings-rule
-      Description: 'Rule to capture Security Hub findings originating from AWS Config'
       EventPattern:
-        source:
-          - aws.securityhub
         detail-type:
           - Security Hub Findings - Imported
+        source:
+          - aws.securityhub
         detail:
           findings:
             ProductFields:
@@ -86,20 +118,88 @@ Resources:
       Targets:
         - Id: SecurityEventQueueTarget
           Arn: !GetAtt SecurityEventQueue.Arn
+          RoleArn: !GetAtt EventBridgeSQSSendRole.Arn
+
+  # EventBridge Rule: Security Group Changes
+  SecurityGroupChangesRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: security-group-changes-rule
+      EventPattern:
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventName:
+            - AuthorizeSecurityGroupIngress
+            - AuthorizeSecurityGroupEgress
+            - RevokeSecurityGroupIngress
+            - RevokeSecurityGroupEgress
+            - CreateSecurityGroup
+            - DeleteSecurityGroup
+      State: ENABLED
+      Targets:
+        - Id: SecurityEventQueueTarget
+          Arn: !GetAtt SecurityEventQueue.Arn
+          RoleArn: !GetAtt EventBridgeSQSSendRole.Arn
+
+  # EventBridge Rule: Console Login Failures
+  ConsoleLoginFailureRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: console-login-failure-rule
+      EventPattern:
+        detail-type:
+          - AWS Console Sign In via CloudTrail
+        source:
+          - aws.signin
+        detail:
+          eventName:
+            - ConsoleLogin
+          errorMessage:
+            - "Failed authentication"
+      State: ENABLED
+      Targets:
+        - Id: SecurityEventQueueTarget
+          Arn: !GetAtt SecurityEventQueue.Arn
+          RoleArn: !GetAtt EventBridgeSQSSendRole.Arn
+
+  # EventBridge Rule: IAM Policy Changes
+  IAMPolicyChangesRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: iam-policy-changes-rule
+      EventPattern:
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventName:
+            - DeleteGroupPolicy
+            - DeleteRolePolicy
+            - DeleteUserPolicy
+            - PutGroupPolicy
+            - PutRolePolicy
+            - PutUserPolicy
+            - CreatePolicy
+            - DeletePolicy
+            - CreatePolicyVersion
+            - DeletePolicyVersion
+            - AttachRolePolicy
+            - DetachRolePolicy
+            - AttachUserPolicy
+            - DetachUserPolicy
+            - AttachGroupPolicy
+            - DetachGroupPolicy
+      State: ENABLED
+      Targets:
+        - Id: SecurityEventQueueTarget
+          Arn: !GetAtt SecurityEventQueue.Arn
+          RoleArn: !GetAtt EventBridgeSQSSendRole.Arn
 
 Outputs:
   SecurityEventQueueURL:
     Description: URL of the SQS queue for security events
     Value: !Ref SecurityEventQueue
+
   SecurityEventQueueARN:
     Description: ARN of the SQS queue for security events
     Value: !GetAtt SecurityEventQueue.Arn
-  GuardDutyFindingsRuleARN:
-    Description: ARN of the EventBridge rule for GuardDuty findings
-    Value: !GetAtt GuardDutyFindingsRule.Arn
-  CloudTrailWriteEventsRuleARN:
-    Description: ARN of the EventBridge rule for CloudTrail write events
-    Value: !GetAtt CloudTrailWriteEventsRule.Arn
-  SecurityHubConfigFindingsRuleARN:
-    Description: ARN of the EventBridge rule for Security Hub Config findings
-    Value: !GetAtt SecurityHubConfigFindingsRule.Arn
