@@ -32,20 +32,8 @@ Resources:
                 Action: sqs:SendMessage
                 Resource: !GetAtt SecurityEventQueue.Arn
 
+  # SQS Queue Policy
   SecurityEventQueuePolicy:
-  Type: AWS::SQS::QueuePolicy
-  Properties:
-    Queues:
-      - !Ref SecurityEventQueue
-    PolicyDocument:
-      Version: '2012-10-17'
-      Statement:
-        - Effect: Allow
-          Principal:
-            Service: events.amazonaws.com
-          Action: "sqs:*"
-          Resource: !GetAtt SecurityEventQueue.Arn
-
     Type: AWS::SQS::QueuePolicy
     Properties:
       Queues:
